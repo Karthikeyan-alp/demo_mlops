@@ -1,0 +1,57 @@
+name: Deploy to Vertex AI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'models/**'
+      - 'deploy/**'
+      - '.deploy-vertex.yaml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: ${{ secrets.GCP_REGION }}
+      BUCKET: ${{ secrets.GCS_BUCKET }}
+      MODEL_DISPLAY_NAME: iris-sklearn
+      ENDPOINT_DISPLAY_NAME: iris-endpoint
+      MODEL_LOCAL_PATH: models/iris_model.pkl
+      TRAFFIC_TO_NEW: "100"
+      MACHINE_TYPE: n1-standard-2
+      VERSION_TAG: ${{ github.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Auth to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deploy deps
+        run: |
+          python -m pip install -r deploy/requirements.txt
+
+      - name: Deploy to Vertex AI
+        run: |
+          python deploy/deploy.py
+
